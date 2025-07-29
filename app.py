@@ -1,103 +1,97 @@
 import streamlit as st
 import random
-import matplotlib.pyplot as plt
-import numpy as np
 
-# Sensor simulation
-def get_soil_moisture():
-    return random.uniform(0, 100)
+st.set_page_config(page_title="Hydround Groundwater Detection Prototype", layout="wide")
 
-def get_temperature():
-    return random.uniform(10, 35)
+st.title("🌊 Hydround Groundwater Detection Prototype 🌊")
+st.write(
+    "Select the number of Hydround chips used in your agriculture. "
+    "We will run scans to check groundwater presence and contamination risk for each chip."
+)
 
-def get_vibration():
-    return random.uniform(0, 5)
+# User input: number of chips
+num_chips = st.number_input("Number of Hydround chips:", min_value=1, max_value=20, value=4, step=1)
 
-def get_sound():
-    return random.uniform(20, 100)
+st.write("---")
 
-def get_nitrate_level():
-    return random.uniform(0, 50)
+# Function to simulate sensor readings for a single chip
+def simulate_chip_readings():
+    moisture = random.uniform(0, 100)      # Soil moisture %
+    temp = random.uniform(10, 35)          # Temperature °C
+    vibration = random.uniform(0, 5)       # Vibration level
+    sound = random.uniform(20, 100)        # Ambient sound dB
+    nitrate = random.uniform(0, 50)        # Nitrate ppm
 
-# Analysis
-def analyze_groundwater(moisture, temp, vibration, sound):
-    return moisture > 60 and 10 < temp < 30 and vibration < 3 and sound < 80
+    # Groundwater presence logic
+    groundwater = moisture > 60 and 10 < temp < 30 and vibration < 3 and sound < 80
 
-def contamination_risk(nitrate):
-    # Assume anything >10 ppm increases risk
-    return min(100, (nitrate / 50) * 100)  # Scale from 0–100%
+    # Contamination risk as percentage (scaled nitrate level, max 100%)
+    contamination_risk_pct = min(100, nitrate * 2)
 
-def estimate_depth(moisture, vibration):
-    if moisture > 70 and vibration < 1:
-        return 2
-    elif moisture > 50:
-        return 5
-    elif moisture > 30:
-        return 10
-    else:
-        return None
+    return {
+        "moisture": moisture,
+        "temp": temp,
+        "vibration": vibration,
+        "sound": sound,
+        "nitrate": nitrate,
+        "groundwater": groundwater,
+        "contamination_risk_pct": contamination_risk_pct,
+    }
 
-# UI Starts Here
-st.title("💧 Hydround Groundwater Detection Prototype")
+# Simulate readings for all chips
+chip_results = [simulate_chip_readings() for _ in range(num_chips)]
 
-num_sensors = st.slider("Select number of sensors", 1, 16, 4)
-scan_now = st.button("Run Scan")
+# Display results for each chip
+st.subheader("Per-Chip Sensor Readings and Analysis")
+for idx, chip in enumerate(chip_results, start=1):
+    st.markdown(f"### Chip {idx}")
+    col1, col2 = st.columns(2)
+    with col1:
+        st.write(f"- **Soil Moisture:** {chip['moisture']:.1f}%")
+        st.write(f"- **Temperature:** {chip['temp']:.1f} °C")
+        st.write(f"- **Vibration Level:** {chip['vibration']:.1f}")
+    with col2:
+        st.write(f"- **Ambient Sound:** {chip['sound']:.1f} dB")
+        st.write(f"- **Nitrate Level:** {chip['nitrate']:.1f} ppm")
+        st.write(f"- **Groundwater Present:** {'✅ Yes' if chip['groundwater'] else '❌ No'}")
+        st.write(f"- **Contamination Risk:** {chip['contamination_risk_pct']:.0f}%")
+    st.markdown("---")
 
-if scan_now:
-    st.subheader("🔎 Sensor Scan Results")
-    cols = int(np.sqrt(num_sensors))
-    rows = int(np.ceil(num_sensors / cols))
+# Calculate overall summary
+overall_groundwater = any(chip['groundwater'] for chip in chip_results)
+average_contamination = sum(chip['contamination_risk_pct'] for chip in chip_results) / num_chips
 
-    fig, ax = plt.subplots()
-    groundwater_map = np.zeros((rows, cols))
-    contamination_map = np.zeros((rows, cols))
+st.subheader("Overall Farmland Summary")
+st.write(f"**Groundwater Present Across Farmland:** {'✅ Yes' if overall_groundwater else '❌ No'}")
+st.write(f"**Average Contamination Risk:** {average_contamination:.0f}%")
 
-    scan_data = []
+st.write("---")
 
-    for i in range(num_sensors):
-        row = i // cols
-        col = i % cols
+# Visualization grid for groundwater presence & contamination risk per chip
+st.subheader("Groundwater Presence Map")
 
-        # Simulate
-        moisture = get_soil_moisture()
-        temp = get_temperature()
-        vibration = get_vibration()
-        sound = get_sound()
-        nitrate = get_nitrate_level()
+cols = st.columns(num_chips)
 
-        # Analyze
-        has_water = analyze_groundwater(moisture, temp, vibration, sound)
-        contamination_pct = contamination_risk(nitrate)
-        depth = estimate_depth(moisture, vibration)
+for i, chip in enumerate(chip_results):
+    color = "#1E90FF" if chip['groundwater'] else "#A0522D"  # DodgerBlue or Sienna (brown)
+    cols[i].markdown(
+        f"""
+        <div style="
+            background-color: {color};
+            padding: 20px 0;
+            border-radius: 8px;
+            text-align: center;
+            font-weight: bold;
+            color: white;
+            user-select: none;
+            ">
+            Chip {i+1}<br>
+            {chip['contamination_risk_pct']:.0f}% contamination
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
-        groundwater_map[row][col] = 1 if has_water else 0
-        contamination_map[row][col] = contamination_pct
+st.write("___")
+st.write("This prototype simulates Hydround chip sensor data and visualizes groundwater and contamination risk across your field.")
 
-        scan_data.append({
-            "Sensor": f"S{i+1}",
-            "Groundwater": "Yes" if has_water else "No",
-            "Contamination Risk (%)": round(contamination_pct, 1),
-            "Estimated Depth (m)": depth if depth else "Not detected"
-        })
-
-    # Display Table
-    st.table(scan_data)
-
-    # Visualize field
-    st.subheader("🗺️ Groundwater Map (Green = Water, Red = Dry)")
-    colors = np.where(groundwater_map == 1, 'green', 'red')
-
-    for i in range(rows):
-        for j in range(cols):
-            ax.add_patch(plt.Rectangle((j, -i), 1, 1, color=colors[i][j]))
-            label = f"{int(contamination_map[i][j])}%"
-            ax.text(j + 0.5, -i + 0.5, label, ha='center', va='center', color='white')
-
-    ax.set_xlim(0, cols)
-    ax.set_ylim(-rows, 0)
-    ax.set_xticks([])
-    ax.set_yticks([])
-    ax.set_aspect('equal')
-    st.pyplot(fig)
-
-    st.success("Scan completed.")
