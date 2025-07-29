@@ -1,97 +1,123 @@
 import streamlit as st
+import numpy as np
+import matplotlib.pyplot as plt
 import random
 
-st.set_page_config(page_title="Hydround Groundwater Detection Prototype", layout="wide")
+st.set_page_config(page_title="Hydround Groundwater Detection Prototype")
 
-st.title("🌊 Hydround Groundwater Detection Prototype 🌊")
+st.title("Hydround Groundwater Detection Prototype")
 st.write(
-    "Select the number of Hydround chips used in your agriculture. "
-    "We will run scans to check groundwater presence and contamination risk for each chip."
+    "Select the number of Hydround chips used on your farmland, then click **Submit** to run the scan and check groundwater presence and contamination risk."
 )
 
-# User input: number of chips
-num_chips = st.number_input("Number of Hydround chips:", min_value=1, max_value=20, value=4, step=1)
+# -- Sensor simulation functions --
 
-st.write("---")
+def simulate_sensors():
+    """
+    Simulate sensor readings for one Hydround chip.
+    Returns:
+        moisture (float): soil moisture %
+        temp (float): temperature °C
+        vibration (float): vibration level
+        sound (float): noise dB
+        nitrate (float): nitrate ppm contamination level
+    """
+    moisture = random.uniform(0, 100)
+    temp = random.uniform(10, 35)
+    vibration = random.uniform(0, 5)
+    sound = random.uniform(20, 100)
+    nitrate = random.uniform(0, 50)
+    return moisture, temp, vibration, sound, nitrate
 
-# Function to simulate sensor readings for a single chip
-def simulate_chip_readings():
-    moisture = random.uniform(0, 100)      # Soil moisture %
-    temp = random.uniform(10, 35)          # Temperature °C
-    vibration = random.uniform(0, 5)       # Vibration level
-    sound = random.uniform(20, 100)        # Ambient sound dB
-    nitrate = random.uniform(0, 50)        # Nitrate ppm
+def analyze_groundwater(moisture, temp, vibration, sound, nitrate):
+    """
+    Analyze if groundwater is present and contamination risk.
+    Returns:
+        groundwater_present (bool)
+        contamination_risk_percent (float)
+    """
+    groundwater_present = moisture > 60 and 10 < temp < 30 and vibration < 3 and sound < 80
+    contamination_risk_percent = min(max((nitrate / 50) * 100, 0), 100)
+    if not groundwater_present:
+        contamination_risk_percent = 0
+    return groundwater_present, contamination_risk_percent
 
-    # Groundwater presence logic
-    groundwater = moisture > 60 and 10 < temp < 30 and vibration < 3 and sound < 80
+# -- Form to select number of Hydround chips --
 
-    # Contamination risk as percentage (scaled nitrate level, max 100%)
-    contamination_risk_pct = min(100, nitrate * 2)
+with st.form(key="chips_form"):
+    num_chips = st.slider("Number of Hydround chips:", min_value=1, max_value=20, value=4)
+    submit_button = st.form_submit_button(label="Submit")
 
-    return {
-        "moisture": moisture,
-        "temp": temp,
-        "vibration": vibration,
-        "sound": sound,
-        "nitrate": nitrate,
-        "groundwater": groundwater,
-        "contamination_risk_pct": contamination_risk_pct,
-    }
+if submit_button:
+    # Simulate and analyze each chip
+    chip_results = []
+    for _ in range(num_chips):
+        sensors = simulate_sensors()
+        groundwater, contamination = analyze_groundwater(*sensors)
+        chip_results.append({
+            "groundwater": groundwater,
+            "contamination": contamination,
+            "sensors": sensors,
+        })
 
-# Simulate readings for all chips
-chip_results = [simulate_chip_readings() for _ in range(num_chips)]
+    # Calculate overall results
+    overall_groundwater = any(chip["groundwater"] for chip in chip_results)
+    if overall_groundwater:
+        contamination_values = [
+            chip["contamination"] for chip in chip_results if chip["groundwater"]
+        ]
+        overall_contamination = sum(contamination_values) / len(contamination_values)
+    else:
+        overall_contamination = 0.0
 
-# Display results for each chip
-st.subheader("Per-Chip Sensor Readings and Analysis")
-for idx, chip in enumerate(chip_results, start=1):
-    st.markdown(f"### Chip {idx}")
-    col1, col2 = st.columns(2)
-    with col1:
-        st.write(f"- **Soil Moisture:** {chip['moisture']:.1f}%")
-        st.write(f"- **Temperature:** {chip['temp']:.1f} °C")
-        st.write(f"- **Vibration Level:** {chip['vibration']:.1f}")
-    with col2:
-        st.write(f"- **Ambient Sound:** {chip['sound']:.1f} dB")
-        st.write(f"- **Nitrate Level:** {chip['nitrate']:.1f} ppm")
-        st.write(f"- **Groundwater Present:** {'✅ Yes' if chip['groundwater'] else '❌ No'}")
-        st.write(f"- **Contamination Risk:** {chip['contamination_risk_pct']:.0f}%")
-    st.markdown("---")
+    st.markdown(f"### Overall Groundwater Present: {'✅ Yes' if overall_groundwater else '❌ No'}")
+    st.markdown(f"### Overall Contamination Risk: {overall_contamination:.2f}%")
 
-# Calculate overall summary
-overall_groundwater = any(chip['groundwater'] for chip in chip_results)
-average_contamination = sum(chip['contamination_risk_pct'] for chip in chip_results) / num_chips
+    # Display individual Hydround chip results
+    st.write("### Individual Hydround Chip Sensor Results:")
+    for idx, chip in enumerate(chip_results, start=1):
+        soil_moisture, temp, vibration, sound, nitrate = chip["sensors"]
+        st.markdown(f"**Hydround Chip #{idx}:**")
+        st.write(
+            f"- Soil Moisture: {soil_moisture:.1f} %\n"
+            f"- Temperature: {temp:.1f} °C\n"
+            f"- Vibration Level: {vibration:.2f}\n"
+            f"- Ambient Sound: {sound:.1f} dB\n"
+            f"- Nitrate Level: {nitrate:.1f} ppm\n"
+            f"- Groundwater Present: {'Yes' if chip['groundwater'] else 'No'}\n"
+            f"- Contamination Risk: {chip['contamination']:.2f}%\n"
+        )
 
-st.subheader("Overall Farmland Summary")
-st.write(f"**Groundwater Present Across Farmland:** {'✅ Yes' if overall_groundwater else '❌ No'}")
-st.write(f"**Average Contamination Risk:** {average_contamination:.0f}%")
+    # Visual groundwater presence map
+    rows = 2
+    cols = (num_chips + 1) // 2
 
-st.write("---")
+    fig, ax = plt.subplots(figsize=(cols * 1.5, rows))
+    for i, chip in enumerate(chip_results):
+        row = i // cols
+        col = i % cols
+        color = "blue" if chip["groundwater"] else "saddlebrown"
+        rect = plt.Rectangle((col, rows - row - 1), 1, 1, facecolor=color)
+        ax.add_patch(rect)
 
-# Visualization grid for groundwater presence & contamination risk per chip
-st.subheader("Groundwater Presence Map")
+        if chip["groundwater"]:
+            contamination_pct = chip["contamination"]
+            ax.text(
+                col + 0.5,
+                rows - row - 0.5,
+                f"{contamination_pct:.1f}%",
+                color="white",
+                ha="center",
+                va="center",
+                fontsize=12,
+                weight='bold',
+            )
 
-cols = st.columns(num_chips)
+    ax.set_xlim(0, cols)
+    ax.set_ylim(0, rows)
+    ax.axis("off")
+    st.pyplot(fig)
 
-for i, chip in enumerate(chip_results):
-    color = "#1E90FF" if chip['groundwater'] else "#A0522D"  # DodgerBlue or Sienna (brown)
-    cols[i].markdown(
-        f"""
-        <div style="
-            background-color: {color};
-            padding: 20px 0;
-            border-radius: 8px;
-            text-align: center;
-            font-weight: bold;
-            color: white;
-            user-select: none;
-            ">
-            Chip {i+1}<br>
-            {chip['contamination_risk_pct']:.0f}% contamination
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-st.write("___")
-st.write("This prototype simulates Hydround chip sensor data and visualizes groundwater and contamination risk across your field.")
+else:
+    st.info("Waiting for you to select the number of Hydround chips and submit.")
 
