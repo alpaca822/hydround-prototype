@@ -13,15 +13,6 @@ st.write(
 # -- Sensor simulation functions --
 
 def simulate_sensors():
-    """
-    Simulate sensor readings for one Hydround chip.
-    Returns:
-        moisture (float): soil moisture %
-        temp (float): temperature °C
-        vibration (float): vibration level
-        sound (float): noise dB
-        nitrate (float): nitrate ppm contamination level
-    """
     moisture = random.uniform(0, 100)
     temp = random.uniform(10, 35)
     vibration = random.uniform(0, 5)
@@ -30,12 +21,6 @@ def simulate_sensors():
     return moisture, temp, vibration, sound, nitrate
 
 def analyze_groundwater(moisture, temp, vibration, sound, nitrate):
-    """
-    Analyze if groundwater is present and contamination risk.
-    Returns:
-        groundwater_present (bool)
-        contamination_risk_percent (float)
-    """
     groundwater_present = moisture > 60 and 10 < temp < 30 and vibration < 3 and sound < 80
     contamination_risk_percent = min(max((nitrate / 50) * 100, 0), 100)
     if not groundwater_present:
@@ -88,7 +73,7 @@ if submit_button:
             f"- Contamination Risk: {chip['contamination']:.2f}%\n"
         )
 
-    # Visual groundwater presence map
+    # Visual groundwater presence map with black grid lines
     rows = 2
     cols = (num_chips + 1) // 2
 
@@ -97,7 +82,14 @@ if submit_button:
         row = i // cols
         col = i % cols
         color = "blue" if chip["groundwater"] else "saddlebrown"
-        rect = plt.Rectangle((col, rows - row - 1), 1, 1, facecolor=color)
+        rect = plt.Rectangle(
+            (col, rows - row - 1),
+            1,
+            1,
+            facecolor=color,
+            edgecolor="black",  # <-- Add grid line border
+            linewidth=1
+        )
         ax.add_patch(rect)
 
         if chip["groundwater"]:
@@ -115,9 +107,11 @@ if submit_button:
 
     ax.set_xlim(0, cols)
     ax.set_ylim(0, rows)
+    ax.set_aspect('equal')
     ax.axis("off")
     st.pyplot(fig)
 
 else:
     st.info("Waiting for you to select the number of Hydround chips and submit.")
+
 
