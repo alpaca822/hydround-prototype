@@ -1,8 +1,9 @@
 import streamlit as st
 import random
-import time
+import matplotlib.pyplot as plt
+import numpy as np
 
-# --- Sensor Reading Simulations ---
+# Sensor simulation
 def get_soil_moisture():
     return random.uniform(0, 100)
 
@@ -18,23 +19,14 @@ def get_sound():
 def get_nitrate_level():
     return random.uniform(0, 50)
 
-# --- Analyze Sensor Data ---
-def analyze_groundwater(moisture, temp, vibration, sound, nitrate):
-    groundwater = moisture > 60 and 10 < temp < 30 and vibration < 3 and sound < 80
-    contamination_risk = nitrate > 10
+# Analysis
+def analyze_groundwater(moisture, temp, vibration, sound):
+    return moisture > 60 and 10 < temp < 30 and vibration < 3 and sound < 80
 
-    if groundwater and not contamination_risk:
-        conclusion = "✅ Groundwater detected and safe for use."
-    elif groundwater and contamination_risk:
-        conclusion = "⚠️ Groundwater detected but contamination risk present!"
-    elif not groundwater and contamination_risk:
-        conclusion = "❌ No groundwater detected and contamination risk present."
-    else:
-        conclusion = "❌ No groundwater detected."
+def contamination_risk(nitrate):
+    # Assume anything >10 ppm increases risk
+    return min(100, (nitrate / 50) * 100)  # Scale from 0–100%
 
-    return groundwater, contamination_risk, conclusion
-
-# --- Estimate groundwater depth ---
 def estimate_depth(moisture, vibration):
     if moisture > 70 and vibration < 1:
         return 2
@@ -45,49 +37,67 @@ def estimate_depth(moisture, vibration):
     else:
         return None
 
-# --- Display results for one scan ---
-def display_results(i, moisture, temp, vibration, sound, nitrate, groundwater, contamination, conclusion, depth):
-    st.markdown(f"### 🔎 Hydround Scan #{i}")
-    st.write(f"- **Soil Moisture:** {moisture:.2f}%")
-    st.write(f"- **Temperature:** {temp:.2f} °C")
-    st.write(f"- **Vibration Level:** {vibration:.2f}")
-    st.write(f"- **Ambient Sound:** {sound:.2f} dB")
-    st.write(f"- **Nitrate Level:** {nitrate:.2f} ppm")
-    if depth:
-        st.write(f"- **Estimated Groundwater Depth:** {depth} meters")
-    else:
-        st.write(f"- **Estimated Groundwater Depth:** Not detected")
-    st.write(f"- **Groundwater Present:** {'Yes' if groundwater else 'No'}")
-    st.write(f"- **Contamination Risk:** {'Yes' if contamination else 'No'}")
-    st.markdown(f"**📝 Conclusion:** {conclusion}")
-    st.markdown("---")
+# UI Starts Here
+st.title("💧 Hydround Groundwater Detection Prototype")
 
-# --- Streamlit App ---
-def main():
-    st.title("🌊 Hydround Groundwater Detection Prototype")
+num_sensors = st.slider("Select number of sensors", 1, 16, 4)
+scan_now = st.button("Run Scan")
 
-    st.write("""
-    This app simulates Hydround’s groundwater sensor readings and AI-powered analysis.
-    Use the button below to run simulated scans and get real-time groundwater status.
-    """)
+if scan_now:
+    st.subheader("🔎 Sensor Scan Results")
+    cols = int(np.sqrt(num_sensors))
+    rows = int(np.ceil(num_sensors / cols))
 
-    num_scans = st.slider("Number of scans to run", min_value=1, max_value=10, value=3)
+    fig, ax = plt.subplots()
+    groundwater_map = np.zeros((rows, cols))
+    contamination_map = np.zeros((rows, cols))
 
-    if st.button("Run Hydround Scan"):
-        for i in range(1, num_scans + 1):
-            moisture = get_soil_moisture()
-            temp = get_temperature()
-            vibration = get_vibration()
-            sound = get_sound()
-            nitrate = get_nitrate_level()
+    scan_data = []
 
-            groundwater, contamination, conclusion = analyze_groundwater(moisture, temp, vibration, sound, nitrate)
-            depth = estimate_depth(moisture, vibration)
+    for i in range(num_sensors):
+        row = i // cols
+        col = i % cols
 
-            display_results(i, moisture, temp, vibration, sound, nitrate, groundwater, contamination, conclusion, depth)
-            
-            if i != num_scans:
-                time.sleep(1)  # pause 1 sec between scans for effect
+        # Simulate
+        moisture = get_soil_moisture()
+        temp = get_temperature()
+        vibration = get_vibration()
+        sound = get_sound()
+        nitrate = get_nitrate_level()
 
-if __name__ == "__main__":
-    main()
+        # Analyze
+        has_water = analyze_groundwater(moisture, temp, vibration, sound)
+        contamination_pct = contamination_risk(nitrate)
+        depth = estimate_depth(moisture, vibration)
+
+        groundwater_map[row][col] = 1 if has_water else 0
+        contamination_map[row][col] = contamination_pct
+
+        scan_data.append({
+            "Sensor": f"S{i+1}",
+            "Groundwater": "Yes" if has_water else "No",
+            "Contamination Risk (%)": round(contamination_pct, 1),
+            "Estimated Depth (m)": depth if depth else "Not detected"
+        })
+
+    # Display Table
+    st.table(scan_data)
+
+    # Visualize field
+    st.subheader("🗺️ Groundwater Map (Green = Water, Red = Dry)")
+    colors = np.where(groundwater_map == 1, 'green', 'red')
+
+    for i in range(rows):
+        for j in range(cols):
+            ax.add_patch(plt.Rectangle((j, -i), 1, 1, color=colors[i][j]))
+            label = f"{int(contamination_map[i][j])}%"
+            ax.text(j + 0.5, -i + 0.5, label, ha='center', va='center', color='white')
+
+    ax.set_xlim(0, cols)
+    ax.set_ylim(-rows, 0)
+    ax.set_xticks([])
+    ax.set_yticks([])
+    ax.set_aspect('equal')
+    st.pyplot(fig)
+
+    st.success("Scan completed.")
